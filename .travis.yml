@@ -1,0 +1,16 @@
+dist: xenial
+language: go
+go:
+    - 1.11.x
+    - 1.12.x
+
+env:
+    - GO111MODULE=on
+
+go_import_path: kreklow.us/go/t38c
+
+script:
+    - go test -race -coverprofile=coverage.txt -covermode=atomic
+
+after_success:
+    - bash <(curl -s https://codecov.io/bash)
