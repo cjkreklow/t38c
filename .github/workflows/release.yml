@@ -1,0 +1,21 @@
+name: Release
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  GO111MODULE: on
+  GOPROXY: https://proxy.golang.org
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    name: Release Updates
+    steps:
+      - name: Setup Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '^1.15.0'
+      - name: Go Get
+        run: go get kreklow.us/go/t38c@${GITHUB_REF#'refs/tags/'}
