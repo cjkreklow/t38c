@@ -109,7 +109,7 @@ func (db *Database) Get(key string, id string, args ...string) (r *Response, err
 
 	r, err = db.runcmd("GET", cmdargs...)
 	if err != nil {
-		if err.Error() == "id not found" {
+		if err.Error() == "received error: id not found" {
 			return nil, nil
 		}
 
