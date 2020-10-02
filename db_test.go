@@ -125,7 +125,7 @@ func TestDBFunc(t *testing.T) {
 	// start mock server on random port
 	testsrv = resp.NewServer()
 	go func() {
-		err := testsrv.ListenAndServe(net.JoinHostPort("localhost", testport))
+		err := testsrv.ListenAndServe(net.JoinHostPort("127.0.0.1", testport))
 		if err != nil {
 			t.Error(err)
 		}
