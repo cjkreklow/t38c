@@ -1,0 +1,21 @@
+name: Lint
+on: [pull_request]
+
+env:
+  GO111MODULE: on
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    name: GolangCI-Lint
+    steps:
+      - name: Setup Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '^1.15.0'
+      - name: Get golangci-lint
+        run: go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Run Lint
+        run: golangci-lint run -v --out-format github-actions

@@ -1,4 +1,4 @@
-// Copyright 2019 Collin Kreklow
+// Copyright 2020 Collin Kreklow
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -24,6 +24,7 @@ package t38c
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"strconv"
 
@@ -33,6 +34,7 @@ import (
 var (
 	errUninitialized = errors.New("database not initialized")
 	errArgs          = errors.New("invalid arguments")
+	errResponse      = errors.New("received error")
 )
 
 // Database is the primary object for interacting with the database.
@@ -47,10 +49,9 @@ type Database struct {
 }
 
 // Connect establishes a connection and returns a Database object.
-func Connect(server string, port string, poolsize int) (*Database, error) {
-	var err error
+func Connect(server string, port string, poolsize int) (db *Database, err error) {
+	db = new(Database)
 
-	db := new(Database)
 	db.pool, err = radix.NewPool(
 		"tcp",
 		net.JoinHostPort(server, port),
@@ -69,92 +70,98 @@ func (db *Database) Close() error {
 	if db.pool == nil {
 		return errUninitialized
 	}
+
 	return db.pool.Close()
 }
 
 // Set saves an object to the database.
-func (db *Database) Set(key string, id string, args ...string) error {
-	var err error
+func (db *Database) Set(key string, id string, args ...string) (err error) {
 	if db.pool == nil {
 		return errUninitialized
 	}
+
 	if args == nil {
 		return errArgs
 	}
 
 	cmdargs := append([]string{key, id}, args...)
+
 	_, err = db.runcmd("SET", cmdargs...)
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
 // Get returns the requested entry as a response object, or nil if the
 // object is not found.
-func (db *Database) Get(key string, id string, args ...string) (*Response, error) {
-	var err error
+func (db *Database) Get(key string, id string, args ...string) (r *Response, err error) {
 	if db.pool == nil {
 		return nil, errUninitialized
 	}
 
 	cmdargs := []string{key, id}
+
 	if args != nil {
 		cmdargs = append(cmdargs, args...)
 	}
-	var r *Response
+
 	r, err = db.runcmd("GET", cmdargs...)
 	if err != nil {
-		if err.Error() == "id not found" {
+		if err.Error() == "received error: id not found" {
 			return nil, nil
 		}
+
 		return nil, err
 	}
+
 	return r, nil
 }
 
 // Scan iterates through a key returning a set of results.
-func (db *Database) Scan(key string, args ...string) (*Response, error) {
-	var err error
+func (db *Database) Scan(key string, args ...string) (r *Response, err error) {
 	if db.pool == nil {
 		return nil, errUninitialized
 	}
 
 	cmdargs := []string{key}
+
 	if args != nil {
 		cmdargs = append(cmdargs, args...)
 	}
-	var r *Response
+
 	r, err = db.runcmd("SCAN", cmdargs...)
 	if err != nil {
 		return nil, err
 	}
+
 	return r, nil
 }
 
 // Search iterates through the string values of a key returning a set of
 // results.
-func (db *Database) Search(key string, args ...string) (*Response, error) {
-	var err error
+func (db *Database) Search(key string, args ...string) (r *Response, err error) {
 	if db.pool == nil {
 		return nil, errUninitialized
 	}
 
 	cmdargs := []string{key}
+
 	if args != nil {
 		cmdargs = append(cmdargs, args...)
 	}
-	var r *Response
+
 	r, err = db.runcmd("SEARCH", cmdargs...)
 	if err != nil {
 		return nil, err
 	}
+
 	return r, nil
 }
 
 // Del deletes the requested entry.
-func (db *Database) Del(key string, id string) error {
-	var err error
+func (db *Database) Del(key string, id string) (err error) {
 	if db.pool == nil {
 		return errUninitialized
 	}
@@ -163,12 +170,12 @@ func (db *Database) Del(key string, id string) error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
 // PDel deletes any entries matching the supplied pattern.
-func (db *Database) PDel(key string, pattern string) error {
-	var err error
+func (db *Database) PDel(key string, pattern string) (err error) {
 	if db.pool == nil {
 		return errUninitialized
 	}
@@ -177,12 +184,12 @@ func (db *Database) PDel(key string, pattern string) error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
 // Expire sets or resets the timeout value on the requested entry.
-func (db *Database) Expire(key string, id string, seconds int) error {
-	var err error
+func (db *Database) Expire(key string, id string, seconds int) (err error) {
 	if db.pool == nil {
 		return errUninitialized
 	}
@@ -191,12 +198,12 @@ func (db *Database) Expire(key string, id string, seconds int) error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
 // Persist removes the timeout value on the requested entry.
-func (db *Database) Persist(key string, id string) error {
-	var err error
+func (db *Database) Persist(key string, id string) (err error) {
 	if db.pool == nil {
 		return errUninitialized
 	}
@@ -205,60 +212,64 @@ func (db *Database) Persist(key string, id string) error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
 // TTL returns the timeout value on the requested entry.
-func (db *Database) TTL(key string, id string) (float64, error) {
-	var err error
+func (db *Database) TTL(key string, id string) (ttl float64, err error) {
 	if db.pool == nil {
 		return 0, errUninitialized
 	}
 
-	var r *Response
-	r, err = db.runcmd("TTL", key, id)
+	r, err := db.runcmd("TTL", key, id)
 	if err != nil {
 		return 0, err
 	}
+
 	return r.TTL, nil
 }
 
 // runcmd runs a command against the database.
-func (db *Database) runcmd(cmd string, args ...string) (*Response, error) {
-	var err error
+func (db *Database) runcmd(cmd string, args ...string) (r *Response, err error) {
 	if args == nil {
 		return nil, errArgs
 	}
-	r := new(Response)
+
+	r = new(Response)
+
 	err = db.pool.Do(radix.Cmd(r, cmd, args...))
 	if err != nil {
 		return nil, err
 	}
+
 	if !r.Ok {
-		return nil, errors.New(r.Err)
+		return nil, fmt.Errorf("%w: %s", errResponse, r.Err)
 	}
+
 	return r, nil
 }
 
 // connectJSON creates a connection and sets the output mode to JSON.
-func connectJSON(net, addr string) (radix.Conn, error) {
-	var err error
-
-	var conn radix.Conn
+func connectJSON(net, addr string) (conn radix.Conn, err error) {
 	conn, err = radix.Dial(net, addr)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := new(Response)
+
 	err = conn.Do(radix.Cmd(resp, "OUTPUT", "json"))
 	if err != nil {
 		conn.Close()
+
 		return nil, err
 	}
+
 	if !resp.Ok {
 		conn.Close()
-		return nil, errors.New(resp.Err)
+
+		return nil, fmt.Errorf("%w: %s", errResponse, resp.Err)
 	}
 
 	return conn, nil
