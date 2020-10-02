@@ -1,0 +1,73 @@
+linters:
+  disable-all: true
+  enable:
+    - asciicheck       # Check for non-ASCII identifiers
+    - bodyclose        # Checks whether HTTP response body is closed successfully
+    - deadcode         # Finds unused code
+    - dogsled          # Checks assignments with too many blank identifiers
+    - dupl             # Code clone detection
+    - errcheck         # Checking for unchecked errors
+    - exhaustive       # Check exhaustiveness of enum switch statements
+    - exportloopref    # Checks for pointers to enclosing loop variables
+    - funlen           # Detection of long functions
+    - gochecknoglobals # Checks that no globals are present
+    - gochecknoinits   # Checks that no init functions are present in Go code
+    - gocognit         # Computes and checks the cognitive complexity of functions
+    - goconst          # Finds repeated strings that could be replaced by a constant
+    - gocritic         # The most opinionated Go source code linter
+    - gocyclo          # Computes and checks the cyclomatic complexity of functions
+    - godot            # Check if comments end in a period
+    - godox            # Detection of FIXME, TODO and other comment keywords
+    - goerr113         # Check error handling expressions
+    - gofmt            # Checks whether code was gofmt-ed
+    - golint           # Prints out style mistakes
+    - goprintffuncname # Checks that printf-like functions are named with `f` at the end
+    - gosec            # Inspects source code for security problems
+    - gosimple         # Specializes in simplifying code
+    - govet            # Reports suspicious constructs, such as Printf calls whose arguments do not align with the format string
+    - ineffassign      # Detects when assignments to existing variables are not used
+    - interfacer       # Suggests narrower interface types
+    - maligned         # Detect Go structs that would take less memory if their fields were sorted
+    - misspell         # Finds commonly misspelled English words in comments
+    - nakedret         # Finds naked returns in functions greater than a specified function length
+    - nestif           # Reports deeply nested if statements
+    - nlreturn         # Checks for a new line before return and branch statements
+    - nolintlint       # Reports ill-formed or insufficient nolint directives
+    - prealloc         # Finds slice declarations that could potentially be preallocated
+    - rowserrcheck     # Checks whether err of rows is checked successfully
+    - scopelint        # Checks for unpinned variables in go programs
+    - staticcheck      # Go vet on steroids, applying a ton of static analysis checks
+    - structcheck      # Finds unused struct fields
+    - testpackage      # Makes you use a separate _test package
+    - typecheck        # Like the front-end of a Go compiler, parses and type-checks Go code
+    - unconvert        # Remove unnecessary type conversions
+    - unparam          # Reports unused function parameters
+    - unused           # Checks for unused constants, variables, functions and types
+    - varcheck         # Finds unused global variables and constants
+    - whitespace       # Detection of leading and trailing whitespace
+    - wsl              # Whitespace Linter - Forces you to use empty lines!
+    #- depguard         # Checks if package imports are in a list of acceptable packages
+    #- gci              # Control package import order and make it always deterministic
+    #- gofumpt          # Checks whether code was gofumpt-ed
+    #- goheader         # Checks if file header matches to pattern
+    #- goimports        # Does everything that gofmt does and checks unused imports
+    #- gomnd            # An analyzer to detect magic numbers
+    #- gomodguard       # Allow and block list linter for direct Go module dependencies. This is different from depguard where there are different block types for example version constraints and module recommendations.
+    #- lll              # Reports long lines
+    #- noctx            # Finds sending HTTP request without context.Context
+    #- sqlclosecheck    # Checks that sql.Rows and sql.Stmt are closed.
+    #- stylecheck       # Replacement for golint
+
+issues:
+  include:
+    - EXC0002
+    - EXC0005
+
+linters-settings:
+  maligned:
+    suggest-new: true
+  nolintlint:
+    allow-unused: false
+    allow-leading-space: false
+    require-explanation: true
+    require-specific: true
