@@ -1,4 +1,4 @@
-// Copyright 2019 Collin Kreklow
+// Copyright 2020 Collin Kreklow
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -24,14 +24,20 @@ package t38c
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/tidwall/gjson"
 )
 
+// Define internal errors.
+var (
+	errInvalidJSON = errors.New("received invalid JSON")
+	errDecode      = errors.New("error decoding response")
+)
+
 // Response represents a database response.
 type Response struct {
-	Ok          bool
 	ID          string
 	Object      string
 	IDs         []string
@@ -43,6 +49,7 @@ type Response struct {
 	TTL         float64
 	Err         string
 	Elapsed     string
+	Ok          bool
 
 	Live    bool
 	Command string
@@ -62,19 +69,20 @@ func (r *Response) UnmarshalText(b []byte) (err error) {
 		// return them as errors.
 		var r = recover()
 		if r != nil {
-			err = errors.New(r.(string))
+			err = fmt.Errorf("%w: %s", errDecode, r.(string))
 		}
 	}()
 
 	if !gjson.ValidBytes(b) {
-		return errors.New("received invalid JSON")
+		return errInvalidJSON
 	}
 
-	gjson.ParseBytes(b).ForEach(r.decodefield)
+	gjson.ParseBytes(b).ForEach(r.decode)
+
 	return nil
 }
 
-func (r *Response) decodefield(k, v gjson.Result) bool {
+func (r *Response) decode(k, v gjson.Result) bool {
 	switch k.Str {
 	case "ok":
 		r.Ok = v.Bool()
@@ -89,35 +97,17 @@ func (r *Response) decodefield(k, v gjson.Result) bool {
 	case "ids":
 		v.ForEach(func(_, x gjson.Result) bool {
 			r.IDs = append(r.IDs, x.Str)
+
 			return true
 		})
 	case "objects":
 		v.ForEach(func(_, x gjson.Result) bool {
 			r.Objects = append(r.Objects, x.Raw)
+
 			return true
 		})
 	case "fields":
-		if r.FieldNames == nil {
-			r.FieldNames = make(map[string]int64)
-		}
-		if v.IsArray() {
-			v.ForEach(func(_, x gjson.Result) bool {
-				r.FieldNames[x.Str] = r.fields
-				r.fields++
-				return true
-			})
-			break
-		}
-		if v.IsObject() {
-			v.ForEach(func(l, x gjson.Result) bool {
-				r.FieldNames[l.Str] = r.fields
-				r.fields++
-				r.FieldValues = append(r.FieldValues, x.Num)
-				return true
-			})
-			break
-		}
-		panic("unknown field type")
+		r.decodefields(v)
 	case "count":
 		r.Count = int64(v.Num)
 	case "cursor":
@@ -143,5 +133,35 @@ func (r *Response) decodefield(k, v gjson.Result) bool {
 	default:
 		panic("unknown response value")
 	}
+
 	return true
+}
+
+func (r *Response) decodefields(v gjson.Result) {
+	r.FieldNames = make(map[string]int64)
+
+	if v.IsArray() {
+		v.ForEach(func(_, x gjson.Result) bool {
+			r.FieldNames[x.Str] = r.fields
+			r.fields++
+
+			return true
+		})
+
+		return
+	}
+
+	if v.IsObject() {
+		v.ForEach(func(l, x gjson.Result) bool {
+			r.FieldNames[l.Str] = r.fields
+			r.fields++
+			r.FieldValues = append(r.FieldValues, x.Num)
+
+			return true
+		})
+
+		return
+	}
+
+	panic("unknown field type")
 }
