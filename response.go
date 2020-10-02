@@ -23,17 +23,9 @@
 package t38c
 
 import (
-	"errors"
-	"fmt"
 	"time"
 
 	"github.com/tidwall/gjson"
-)
-
-// Define internal errors.
-var (
-	errInvalidJSON = errors.New("received invalid JSON")
-	errDecode      = errors.New("error decoding response")
 )
 
 // Response represents a database response.
@@ -66,23 +58,25 @@ type Response struct {
 func (r *Response) UnmarshalText(b []byte) (err error) {
 	defer func() {
 		// since gjson.ForEach doesn't return errors, catch panics and
-		// return them as errors.
-		var r = recover()
+		// return them as errors
+		r := recover()
 		if r != nil {
-			err = fmt.Errorf("%w: %s", errDecode, r.(string))
+			err = newErrorf(nil, "error unmarshaling response: %s", r.(string))
 		}
 	}()
 
 	if !gjson.ValidBytes(b) {
-		return errInvalidJSON
+		return newError(nil, "error unmarshaling response: not valid JSON")
 	}
 
-	gjson.ParseBytes(b).ForEach(r.decode)
+	gjson.ParseBytes(b).ForEach(r.parse)
 
 	return nil
 }
 
-func (r *Response) decode(k, v gjson.Result) bool {
+// parse is an iterator function used in gjson.ForEach to parse the
+// response JSON into the Response fields.
+func (r *Response) parse(k, v gjson.Result) bool {
 	switch k.Str {
 	case "ok":
 		r.Ok = v.Bool()
@@ -107,7 +101,7 @@ func (r *Response) decode(k, v gjson.Result) bool {
 			return true
 		})
 	case "fields":
-		r.decodefields(v)
+		r.parsefields(v)
 	case "count":
 		r.Count = int64(v.Num)
 	case "cursor":
@@ -137,7 +131,9 @@ func (r *Response) decode(k, v gjson.Result) bool {
 	return true
 }
 
-func (r *Response) decodefields(v gjson.Result) {
+// parsefields is an iterator function used in gjson.ForEach to parse
+// the fields array or object into a map.
+func (r *Response) parsefields(v gjson.Result) {
 	r.FieldNames = make(map[string]int64)
 
 	if v.IsArray() {
