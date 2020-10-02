@@ -242,18 +242,3 @@ func testResponseSrvErr(t *testing.T) {
 		tErrorStr(t, "Err", expErr, r.Err)
 	}
 }
-
-func tFatalErr(t *testing.T, desc string, err error) { //nolint:unparam // future use
-	t.Helper()
-	t.Fatalf("%s: received unexpected error: %s", desc, err)
-}
-
-func tErrorStr(t *testing.T, desc string, exp interface{}, act interface{}) {
-	t.Helper()
-	t.Errorf("%s: expected %s | received %s", desc, exp, act)
-}
-
-func tErrorVal(t *testing.T, desc string, exp interface{}, act interface{}) {
-	t.Helper()
-	t.Errorf("%s: expected %v | received %v", desc, exp, act)
-}
