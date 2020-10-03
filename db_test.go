@@ -1,4 +1,4 @@
-// Copyright 2019 Collin Kreklow
+// Copyright 2020 Collin Kreklow
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -24,25 +24,21 @@ package t38c_test
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
-	"math/rand"
-	"net"
 	"reflect"
-	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/tidwall/resp"
 	"kreklow.us/go/t38c"
+	"kreklow.us/go/t38c/internal/mock"
 )
 
-//nolint:gochecknoglobals // to be refactored
+//nolint:gochecknoglobals // internal vars shared between test cases
 var (
-	testT *testing.T
+	srv *mock.Server = mock.NewServer()
 
-	testErrCmds = map[string][]interface{}{
+	testErrFuncs = map[string][]interface{}{
 		"Set":     {"test", "obj1", "STRING", "testing"},
 		"Del":     {"test", "obj1"},
 		"PDel":    {"test", "obj*"},
@@ -50,637 +46,485 @@ var (
 		"Persist": {"test", "obj1"},
 	}
 
-	testRespErrCmds = map[string][]interface{}{
+	testRespErrFuncs = map[string][]interface{}{
 		"Get":    {"test", "obj1"},
 		"Scan":   {"test"},
 		"Search": {"test"},
 	}
-
-	testport    string
-	testsrvdata [][]byte
-	testsrv     *resp.Server
-	testdb      *t38c.Database
 )
 
-// TestUninitialized tests running functions on an uninitialized
-// Database object.
-func TestUninitialized(t *testing.T) {
-	db := new(t38c.Database)
-	errTxt := "database not initialized"
-
-	for c, a := range testErrCmds {
-		ai := reflectMethod(db, c, a...)
-		if len(ai) != 1 {
-			t.Errorf("%s: unexpected return values: %v\n", c, ai)
-		}
-
-		err, ok := ai[0].(error)
-		if !ok {
-			t.Errorf("%s: expected error, received %T\n", c, ai[0])
-		} else if err.Error() != errTxt {
-			t.Errorf("%s: expected: %s\nreceived: %s\n", c, errTxt, err)
-		}
-	}
-
-	for c, a := range testRespErrCmds {
-		ai := reflectMethod(db, c, a...)
-		if len(ai) != 2 {
-			t.Errorf("%s: unexpected return values: %v\n", c, ai)
-		}
-
-		resp, ok := ai[0].(*t38c.Response)
-		if !ok {
-			t.Errorf("%s: expected *Response, received %T\n", c, ai[0])
-		} else if resp != nil {
-			t.Errorf("%s: received non-nil response: %v\n", c, resp)
-		}
-
-		err, ok := ai[1].(error)
-		if !ok {
-			t.Errorf("%s: expected error, received %T\n", c, ai[1])
-		} else if err.Error() != errTxt {
-			t.Errorf("%s: expected: %s\nreceived: %s\n", c, errTxt, err)
-		}
-	}
-
-	ttl, err := db.TTL("test", "obj1")
-	if err == nil || err.Error() != errTxt {
-		t.Errorf("TTL received: %s\nexpected: %s\n", err, errTxt)
-	}
-
-	if ttl != 0 {
-		t.Error("TTL received non-zero response with error")
-	}
-
-	err = db.Close()
-	if err == nil || err.Error() != errTxt {
-		t.Errorf("Close received: %s\nexpected: %s\n", err, errTxt)
-	}
+// Test Connect errors.
+func TestConnectErrors(t *testing.T) {
+	t.Run("Fail", testConnectFail)
+	t.Run("Error", testConnectError)
+	t.Run("False", testConnectFalse)
 }
 
-// TestDBFunc tests database functions against a mock server.
-func TestDBFunc(t *testing.T) { //nolint:funlen // to be refactored
-	// obtain random port
-	rand.Seed(time.Now().UnixNano())
-	testport = strconv.Itoa(rand.Intn(40000) + 10000) //nolint:gosec // not security related
-
-	// test connection failure
-	t.Run("ConnectFail", testConnectFail)
-
-	// start mock server on random port
-	testsrv = resp.NewServer()
-
-	go func() {
-		err := testsrv.ListenAndServe(net.JoinHostPort("127.0.0.1", testport))
-		if err != nil {
-			t.Error(err)
-		}
-	}()
-	time.Sleep(100 * time.Millisecond) // give server time to start
-
-	// test connection errors
-	t.Run("ConnectError", testConnectError)
-	t.Run("ConnectFalse", testConnectFalse)
-
-	// test successful connection
-	testsrv.HandleFunc("OUTPUT", respReturnOKTrue)
-
-	testsrvdata = [][]byte{}
-	output := []byte("OUTPUT json")
-
-	db, err := t38c.Connect("127.0.0.1", testport, 1)
-	if err != nil {
-		t.Fatalf("unexpected error: %v\n", err)
-	}
-
-	if db == nil {
-		t.Fatal("db returned nil")
-	}
-
-	if len(testsrvdata) != 1 {
-		t.Fatalf("received %d values, expected 1\n", len(testsrvdata))
-	}
-
-	if !bytes.Equal(testsrvdata[0], []byte("OUTPUT json")) {
-		t.Fatalf("Received %s\nExpected: %s\n", testsrvdata, output)
-	}
-
-	testdb = db
-
-	// test error responses
-	t.Run("CommandError", testCmdError)
-	t.Run("CommandFalse", testCmdFalse)
-	t.Run("CommandSuccess", testCmdSuccess)
-	t.Run("GetNotFound", testGetNotFound)
-
-	err = db.Set("test", "obj")
-	if err == nil || err.Error() != "invalid arguments" {
-		t.Errorf("Set expected invalid arguments, received %v\n", err)
-	}
-
-	/*
-		r, err := db.runcmd("test")
-		if err == nil || err.Error() != "invalid arguments" {
-			t.Errorf("runcmd expected invalid arguments, received %v\n", err)
-		}
-		if r != nil {
-			t.Errorf("runcmd expected nil, received response %v\n", r)
-		}
-	*/
-
-	db.Close()
-}
-
-// Test Connect with no server running.
+// Test Connect with network error.
 func testConnectFail(t *testing.T) {
-	db, err := t38c.Connect("127.0.0.1", testport, 1)
-	if db != nil {
-		t.Error("db not nil on error")
+	db, err := t38c.Connect("fakehost", "9999", 1)
+	if err == nil {
+		tFatalNoErr(t, "Connect")
 	}
 
-	if err == nil || !strings.Contains(err.Error(), "connection refused") {
-		t.Errorf("unexpected error received: %v\n", err)
+	if !strings.HasPrefix(err.Error(), "error connecting to server:") {
+		tErrorStr(t, "Connect", "error connecting to servier", err)
+	}
+
+	if db != nil {
+		tErrorStr(t, "DB", "nil", "not nil")
 	}
 }
 
 // Test Connect with error from server.
 func testConnectError(t *testing.T) {
-	output := []byte("OUTPUT json")
+	srv.HandleFunc("OUTPUT", srv.ReturnErr)
+	srv.DataIn.Reset()
 
-	testsrv.HandleFunc("OUTPUT", respReturnErr)
+	db, err := t38c.Connect("127.0.0.1", "9876", 1)
+	if err == nil {
+		tFatalNoErr(t, "Connect")
+	}
 
-	testsrvdata = [][]byte{}
+	expErr := fmt.Sprintf("error connecting to server: %s", mock.TestServerError)
+	if err.Error() != expErr {
+		tErrorStr(t, "Connect", expErr, err)
+	}
 
-	db, err := t38c.Connect("127.0.0.1", testport, 1)
 	if db != nil {
-		t.Error("db not nil on error")
+		tErrorStr(t, "DB", "nil", "not nil")
 	}
 
-	errTxt := "test server error"
-	if err == nil || err.Error() != errTxt {
-		t.Errorf("Received: %v\nExpected: %s\n", err, errTxt)
-	}
-
-	if len(testsrvdata) != 1 {
-		t.Errorf("Received %d values, expected 1\n", len(testsrvdata))
-	} else if !bytes.Equal(testsrvdata[0], output) {
-		t.Errorf("Received %s\nExpected: %s\n", testsrvdata[0], output)
+	expData := []byte("OUTPUT json")
+	if !bytes.Equal(expData, srv.DataIn.Bytes()) {
+		tErrorStr(t, "Data", expData, srv.DataIn.Bytes())
 	}
 }
 
 // Test Connect with false response from server.
 func testConnectFalse(t *testing.T) {
-	output := []byte("OUTPUT json")
+	srv.HandleFunc("OUTPUT", srv.ReturnOkFalse)
+	srv.DataIn.Reset()
 
-	testsrv.HandleFunc("OUTPUT", respReturnOKFalse)
+	db, err := t38c.Connect("127.0.0.1", "9876", 1)
+	if err == nil {
+		tFatalNoErr(t, "Connect")
+	}
 
-	testsrvdata = [][]byte{}
+	expErr := fmt.Sprintf("error connecting to server: received error: %s", mock.TestOkFalse)
+	if err.Error() != expErr {
+		tErrorStr(t, "Connect", expErr, err)
+	}
 
-	db, err := t38c.Connect("127.0.0.1", testport, 1)
 	if db != nil {
-		t.Error("db not nil on error")
+		tErrorStr(t, "DB", "nil", "not nil")
 	}
 
-	errTxt := "received error: test ok error"
-	if err == nil || err.Error() != errTxt {
-		t.Errorf("Received: %v\nExpected: %s\n", err, errTxt)
-	}
-
-	if len(testsrvdata) != 1 {
-		t.Errorf("Received %d values, expected 1\n", len(testsrvdata))
-	} else if !bytes.Equal(testsrvdata[0], output) {
-		t.Errorf("Received %s\nExpected: %s\n", testsrvdata[0], output)
+	expData := []byte("OUTPUT json")
+	if !bytes.Equal(expData, srv.DataIn.Bytes()) {
+		tErrorStr(t, "Data", expData, srv.DataIn.Bytes())
 	}
 }
 
-// Test error responses.
-func testCmdError(t *testing.T) { //nolint:funlen,gocognit,dupl // to be refactored
-	errTxt := "test server error"
+// Test uninitialized errors.
+func TestUninitialized(t *testing.T) {
+	db := new(t38c.Database)
 
-	for c, a := range testErrCmds {
-		testsrvdata = [][]byte{}
-		cmd := strings.ToUpper(c)
-		txtargs := []string{cmd}
+	expErr := "database not initialized"
 
-		for _, z := range a {
-			txtargs = append(txtargs, fmt.Sprintf("%v", z))
+	for f, args := range testErrFuncs {
+		ret := reflectMethod(db, f, args...)
+		if len(ret) != 1 {
+			t.Errorf("%s: expected 1 value, received %d", f, len(ret))
 		}
 
-		output := []byte(strings.Join(txtargs, " "))
-
-		testsrv.HandleFunc(cmd, respReturnErr)
-
-		ai := reflectMethod(testdb, c, a...)
-		if len(ai) != 1 {
-			t.Errorf("%s: unexpected return values: %v\n", c, ai)
-		}
-
-		err, ok := ai[0].(error)
+		err, ok := ret[0].(error)
 		if !ok {
-			t.Errorf("%s: expected error, received %T\n", c, ai[0])
-		} else if err.Error() != errTxt {
-			t.Errorf("%s: expected: %s\nreceived: %s\n", c, errTxt, err)
-		}
-
-		if len(testsrvdata) != 1 {
-			t.Errorf("%s: received %d values, expected 1\n", c, len(testsrvdata))
-		} else if !bytes.Equal(testsrvdata[0], output) {
-			t.Errorf("%s: received %s\nExpected: %s\n", c, testsrvdata, output)
+			t.Errorf("%s: expected error, received %T", f, ret[0])
+		} else if err.Error() != expErr {
+			tErrorStr(t, f, expErr, err)
 		}
 	}
 
-	for c, a := range testRespErrCmds {
-		testsrvdata = [][]byte{}
-		cmd := strings.ToUpper(c)
-		txtargs := []string{cmd}
-
-		for _, z := range a {
-			txtargs = append(txtargs, fmt.Sprintf("%v", z))
+	for f, args := range testRespErrFuncs {
+		ret := reflectMethod(db, f, args...)
+		if len(ret) != 2 {
+			t.Errorf("%s: expected 2 values, received %d", f, len(ret))
 		}
 
-		output := []byte(strings.Join(txtargs, " "))
-
-		testsrv.HandleFunc(cmd, respReturnErr)
-
-		ai := reflectMethod(testdb, c, a...)
-		if len(ai) != 2 {
-			t.Errorf("%s: unexpected return values: %v\n", c, ai)
-		}
-
-		resp, ok := ai[0].(*t38c.Response)
+		err, ok := ret[1].(error)
 		if !ok {
-			t.Errorf("%s: expected *Response, received %T\n", c, ai[0])
+			t.Errorf("%s: expected error, received %T", f, ret[1])
+		} else if err.Error() != expErr {
+			tErrorStr(t, f, expErr, err)
+		}
+
+		resp, ok := ret[0].(*t38c.Response)
+		if !ok {
+			t.Errorf("%s: expected *Response, received %T", f, ret[0])
 		} else if resp != nil {
-			t.Errorf("%s: received non-nil response: %v\n", c, resp)
-		}
-
-		err, ok := ai[1].(error)
-		if !ok {
-			t.Errorf("%s: expected error, received %T\n", c, ai[1])
-		} else if err.Error() != errTxt {
-			t.Errorf("%s: expected: %s\nreceived: %s\n", c, errTxt, err)
-		}
-
-		if len(testsrvdata) != 1 {
-			t.Errorf("%s: received %d values, expected 1\n", c, len(testsrvdata))
-		} else if !bytes.Equal(testsrvdata[0], output) {
-			t.Errorf("%s: received %s\nExpected: %s\n", c, testsrvdata, output)
+			t.Errorf("%s: received non-nil response: %v", f, resp)
 		}
 	}
 
-	testsrvdata = [][]byte{}
-	output := []byte("TTL test obj1")
-
-	testsrv.HandleFunc("TTL", respReturnErr)
-
-	ttl, err := testdb.TTL("test", "obj1")
-	if err == nil || err.Error() != errTxt {
-		t.Errorf("TTL received: %s\nexpected: %s\n", err, errTxt)
+	ttl, err := db.TTL("test", "obj1")
+	if err == nil {
+		tErrorStr(t, "TTL", "error", "nil")
+	} else if err.Error() != expErr {
+		tErrorStr(t, "TTL", expErr, err)
 	}
 
 	if ttl != 0 {
-		t.Error("TTL received non-zero response with error")
+		tErrorVal(t, "TTL", 0, ttl)
 	}
 
-	if len(testsrvdata) != 1 {
-		t.Errorf("TTL received %d values, expected 1\n", len(testsrvdata))
-	} else if !bytes.Equal(testsrvdata[0], output) {
-		t.Errorf("TTL received %s\nExpected: %s\n", testsrvdata, output)
+	err = db.Close()
+	if err == nil {
+		tErrorStr(t, "Close", "error", "nil")
+	} else if err.Error() != expErr {
+		tErrorStr(t, "Close", expErr, err)
 	}
 }
 
-// Test false responses.
-func testCmdFalse(t *testing.T) { //nolint:funlen,gocognit,dupl // to be refactored
-	errTxt := "received error: test ok error"
+// Test commands with mock server.
+func TestCommands(t *testing.T) {
+	t.Run("Server Errors", testCommandErrors)
+	t.Run("Response Errors", testCommandFalse)
+	t.Run("Set No Args", testCommandSetNoArgs)
+	t.Run("Get Not Found", testCommandGetNotFound)
+	t.Run("Success", testCommandSuccess)
+}
 
-	for c, a := range testErrCmds {
-		testsrvdata = [][]byte{}
-		cmd := strings.ToUpper(c)
+// Test command with error from server.
+func testCommandErrors(t *testing.T) {
+	testCommandErr(t, srv.ReturnErr, mock.TestServerError)
+}
+
+// Test command with false response from server.
+func testCommandFalse(t *testing.T) {
+	testCommandErr(t, srv.ReturnOkFalse, fmt.Sprintf("received error: %s", mock.TestOkFalse))
+}
+
+// Run test commands expecting errors.
+func testCommandErr(t *testing.T, hf func(*resp.Conn, []resp.Value) bool, expErr string) { //nolint:funlen,gocognit // long test function okay
+	srv.HandleFunc("OUTPUT", srv.ReturnOkTrue)
+	srv.DataIn.Reset()
+
+	db, err := t38c.Connect("127.0.0.1", "9876", 1)
+	if err != nil {
+		tFatalErr(t, "Connect", err)
+	}
+
+	if db == nil {
+		t.Fatal("Connect: no db returned")
+	}
+
+	expData := []byte("OUTPUT json")
+	if !bytes.Equal(expData, srv.DataIn.Bytes()) {
+		tErrorStr(t, "Data", expData, srv.DataIn.Bytes())
+	}
+
+	for f, args := range testErrFuncs {
+		cmd := strings.ToUpper(f)
 		txtargs := []string{cmd}
 
-		for _, z := range a {
+		for _, z := range args {
 			txtargs = append(txtargs, fmt.Sprintf("%v", z))
 		}
 
-		output := []byte(strings.Join(txtargs, " "))
+		srv.HandleFunc(cmd, hf)
+		srv.DataIn.Reset()
 
-		testsrv.HandleFunc(cmd, respReturnOKFalse)
-
-		ai := reflectMethod(testdb, c, a...)
-		if len(ai) != 1 {
-			t.Errorf("%s: unexpected return values: %v\n", c, ai)
+		ret := reflectMethod(db, f, args...)
+		if len(ret) != 1 {
+			t.Errorf("%s: expected 1 value, received %d", f, len(ret))
 		}
 
-		err, ok := ai[0].(error)
+		err, ok := ret[0].(error)
 		if !ok {
-			t.Errorf("%s: expected error, received %T\n", c, ai[0])
-		} else if err.Error() != errTxt {
-			t.Errorf("%s: expected: %s\nreceived: %s\n", c, errTxt, err)
+			t.Errorf("%s: expected error, received %T", f, ret[0])
+		} else if err.Error() != expErr {
+			tErrorStr(t, f, expErr, err)
 		}
 
-		if len(testsrvdata) != 1 {
-			t.Errorf("%s: received %d values, expected 1\n", c, len(testsrvdata))
-		} else if !bytes.Equal(testsrvdata[0], output) {
-			t.Errorf("%s: received %s\nExpected: %s\n", c, testsrvdata, output)
+		expData = []byte(strings.Join(txtargs, " "))
+		if !bytes.Equal(expData, srv.DataIn.Bytes()) {
+			tErrorStr(t, f, expData, srv.DataIn.Bytes())
 		}
 	}
 
-	for c, a := range testRespErrCmds {
-		testsrvdata = [][]byte{}
-		cmd := strings.ToUpper(c)
+	for f, args := range testRespErrFuncs {
+		cmd := strings.ToUpper(f)
 		txtargs := []string{cmd}
 
-		for _, z := range a {
+		for _, z := range args {
 			txtargs = append(txtargs, fmt.Sprintf("%v", z))
 		}
 
-		output := []byte(strings.Join(txtargs, " "))
+		srv.HandleFunc(cmd, hf)
+		srv.DataIn.Reset()
 
-		testsrv.HandleFunc(cmd, respReturnOKFalse)
-
-		ai := reflectMethod(testdb, c, a...)
-		if len(ai) != 2 {
-			t.Errorf("%s: unexpected return values: %v\n", c, ai)
+		ret := reflectMethod(db, f, args...)
+		if len(ret) != 2 {
+			t.Errorf("%s: expected 2 values, received %d", f, len(ret))
 		}
 
-		resp, ok := ai[0].(*t38c.Response)
+		err, ok := ret[1].(error)
 		if !ok {
-			t.Errorf("%s: expected *Response, received %T\n", c, ai[0])
+			t.Errorf("%s: expected error, received %T", f, ret[1])
+		} else if err.Error() != expErr {
+			tErrorStr(t, f, expErr, err)
+		}
+
+		resp, ok := ret[0].(*t38c.Response)
+		if !ok {
+			t.Errorf("%s: expected *Response, received %T", f, ret[0])
 		} else if resp != nil {
-			t.Errorf("%s: received non-nil response: %v\n", c, resp)
+			t.Errorf("%s: received non-nil response: %v", f, resp)
 		}
 
-		err, ok := ai[1].(error)
-		if !ok {
-			t.Errorf("%s: expected error, received %T\n", c, ai[1])
-		} else if err.Error() != errTxt {
-			t.Errorf("%s: expected: %s\nreceived: %s\n", c, errTxt, err)
-		}
-
-		if len(testsrvdata) != 1 {
-			t.Errorf("%s: received %d values, expected 1\n", c, len(testsrvdata))
-		} else if !bytes.Equal(testsrvdata[0], output) {
-			t.Errorf("%s: received %s\nExpected: %s\n", c, testsrvdata, output)
+		expData = []byte(strings.Join(txtargs, " "))
+		if !bytes.Equal(expData, srv.DataIn.Bytes()) {
+			tErrorStr(t, f, expData, srv.DataIn.Bytes())
 		}
 	}
 
-	testsrvdata = [][]byte{}
-	output := []byte("TTL test obj1")
+	srv.HandleFunc("TTL", hf)
+	srv.DataIn.Reset()
 
-	testsrv.HandleFunc("TTL", respReturnOKFalse)
-
-	ttl, err := testdb.TTL("test", "obj1")
-	if err == nil || err.Error() != errTxt {
-		t.Errorf("TTL received: %s\nexpected: %s\n", err, errTxt)
+	ttl, err := db.TTL("test", "obj1")
+	if err == nil {
+		tErrorStr(t, "TTL", "error", "nil")
+	} else if err.Error() != expErr {
+		tErrorStr(t, "TTL", expErr, err)
 	}
 
 	if ttl != 0 {
-		t.Error("TTL received non-zero response with error")
+		tErrorVal(t, "TTL", 0, ttl)
 	}
 
-	if len(testsrvdata) != 1 {
-		t.Errorf("TTL received %d values, expected 1\n", len(testsrvdata))
-	} else if !bytes.Equal(testsrvdata[0], output) {
-		t.Errorf("TTL received %s\nExpected: %s\n", testsrvdata, output)
+	expData = []byte("TTL test obj1")
+	if !bytes.Equal(expData, srv.DataIn.Bytes()) {
+		tErrorStr(t, "TTL", expData, srv.DataIn.Bytes())
+	}
+
+	err = db.Close()
+	if err != nil {
+		tFatalErr(t, "Close", err)
 	}
 }
 
-// Test success responses.
-func testCmdSuccess(t *testing.T) { //nolint:funlen,gocognit // to be refactored
-	for c, a := range testErrCmds {
-		testsrvdata = [][]byte{}
-		cmd := strings.ToUpper(c)
+// Test Set with no arguments.
+func testCommandSetNoArgs(t *testing.T) {
+	srv.HandleFunc("OUTPUT", srv.ReturnOkTrue)
+	srv.DataIn.Reset()
+
+	db, err := t38c.Connect("127.0.0.1", "9876", 1)
+	if err != nil {
+		tFatalErr(t, "Connect", err)
+	}
+
+	if db == nil {
+		t.Fatal("Connect: no db returned")
+	}
+
+	expData := []byte("OUTPUT json")
+	if !bytes.Equal(expData, srv.DataIn.Bytes()) {
+		tErrorStr(t, "Data", expData, srv.DataIn.Bytes())
+	}
+
+	srv.HandleFunc("SET", srv.ReturnOkTrue)
+	srv.DataIn.Reset()
+
+	expErr := "invalid arguments"
+
+	err = db.Set("test", "obj1")
+	if err == nil {
+		tErrorStr(t, "Set", "error", "nil")
+	} else if err.Error() != expErr {
+		tErrorStr(t, "Set", expErr, err)
+	}
+
+	expData = []byte{}
+	if !bytes.Equal(expData, srv.DataIn.Bytes()) {
+		tErrorStr(t, "Set", expData, srv.DataIn.Bytes())
+	}
+
+	err = db.Close()
+	if err != nil {
+		tFatalErr(t, "Close", err)
+	}
+}
+
+// Test Get not found error.
+func testCommandGetNotFound(t *testing.T) {
+	srv.HandleFunc("OUTPUT", srv.ReturnOkTrue)
+	srv.DataIn.Reset()
+
+	db, err := t38c.Connect("127.0.0.1", "9876", 1)
+	if err != nil {
+		tFatalErr(t, "Connect", err)
+	}
+
+	if db == nil {
+		t.Fatal("Connect: no db returned")
+	}
+
+	expData := []byte("OUTPUT json")
+	if !bytes.Equal(expData, srv.DataIn.Bytes()) {
+		tErrorStr(t, "Data", expData, srv.DataIn.Bytes())
+	}
+
+	srv.HandleFunc("GET", srv.ReturnOkNotFound)
+	srv.DataIn.Reset()
+
+	r, err := db.Get("test", "value1")
+	if err != nil {
+		tErrorStr(t, "Get", "nil", err)
+	}
+
+	if r != nil {
+		tErrorVal(t, "Get", "nil", r)
+	}
+
+	expData = []byte("GET test value1")
+	if !bytes.Equal(expData, srv.DataIn.Bytes()) {
+		tErrorStr(t, "Get", expData, srv.DataIn.Bytes())
+	}
+
+	err = db.Close()
+	if err != nil {
+		tFatalErr(t, "Close", err)
+	}
+}
+
+// Run test commands expecting success.
+func testCommandSuccess(t *testing.T) { //nolint:funlen,gocognit // long test function okay
+	srv.HandleFunc("OUTPUT", srv.ReturnOkTrue)
+	srv.DataIn.Reset()
+
+	db, err := t38c.Connect("127.0.0.1", "9876", 1)
+	if err != nil {
+		tFatalErr(t, "Connect", err)
+	}
+
+	if db == nil {
+		t.Fatal("Connect: no db returned")
+	}
+
+	expData := []byte("OUTPUT json")
+	if !bytes.Equal(expData, srv.DataIn.Bytes()) {
+		tErrorStr(t, "Data", expData, srv.DataIn.Bytes())
+	}
+
+	expErr := "nope"
+
+	for f, args := range testErrFuncs {
+		cmd := strings.ToUpper(f)
 		txtargs := []string{cmd}
 
-		for _, z := range a {
+		for _, z := range args {
 			txtargs = append(txtargs, fmt.Sprintf("%v", z))
 		}
 
-		output := []byte(strings.Join(txtargs, " "))
+		srv.HandleFunc(cmd, srv.ReturnOkTrue)
+		srv.DataIn.Reset()
 
-		testsrv.HandleFunc(cmd, respReturnOKTrue)
-
-		ai := reflectMethod(testdb, c, a...)
-		if len(ai) != 1 {
-			t.Errorf("%s: unexpected return values: %v\n", c, ai)
+		ret := reflectMethod(db, f, args...)
+		if len(ret) != 1 {
+			t.Errorf("%s: expected 1 value, received %d", f, len(ret))
 		}
 
-		err, ok := ai[0].(error)
-		if !ok && ai[0] != nil {
-			t.Errorf("%s: expected error, received %T\n", c, ai[0])
+		err, ok := ret[0].(error)
+		if !ok && err != nil {
+			t.Errorf("%s: expected error, received %T", f, ret[0])
 		} else if err != nil {
-			t.Errorf("%s: unexpected error: %v\n", c, err)
+			tFatalErr(t, f, err)
 		}
 
-		if len(testsrvdata) != 1 {
-			t.Errorf("%s: received %d values, expected 1\n", c, len(testsrvdata))
-		} else if !bytes.Equal(testsrvdata[0], output) {
-			t.Errorf("%s: received %s\nExpected: %s\n", c, testsrvdata, output)
+		expData = []byte(strings.Join(txtargs, " "))
+		if !bytes.Equal(expData, srv.DataIn.Bytes()) {
+			tErrorStr(t, f, expData, srv.DataIn.Bytes())
 		}
 	}
 
-	for c, a := range testRespErrCmds {
-		testsrvdata = [][]byte{}
-		cmd := strings.ToUpper(c)
+	for f, args := range testRespErrFuncs {
+		cmd := strings.ToUpper(f)
 		txtargs := []string{cmd}
 
-		for _, z := range a {
+		for _, z := range args {
 			txtargs = append(txtargs, fmt.Sprintf("%v", z))
 		}
 
-		output := []byte(strings.Join(txtargs, " "))
+		srv.HandleFunc(cmd, srv.ReturnOkTrue)
+		srv.DataIn.Reset()
 
-		testsrv.HandleFunc(cmd, respReturnOKTrue)
-
-		ai := reflectMethod(testdb, c, a...)
-		if len(ai) != 2 {
-			t.Errorf("%s: unexpected return values: %v\n", c, ai)
+		ret := reflectMethod(db, f, args...)
+		if len(ret) != 2 {
+			t.Errorf("%s: expected 2 values, received %d", f, len(ret))
 		}
 
-		resp, ok := ai[0].(*t38c.Response)
+		err, ok := ret[1].(error)
+		if !ok && err != nil {
+			t.Errorf("%s: expected error, received %T", f, ret[1])
+		} else if err != nil {
+			tErrorStr(t, f, expErr, err)
+		}
+
+		resp, ok := ret[0].(*t38c.Response)
 		if !ok {
-			t.Errorf("%s: expected *Response, received %T\n", c, ai[0])
+			t.Errorf("%s: expected *Response, received %T", f, ret[0])
 		} else if resp == nil {
-			t.Errorf("%s: received nil response\n", c)
+			t.Errorf("%s: received nil response", f)
 		}
 
-		err, ok := ai[1].(error)
-		if !ok && ai[1] != nil {
-			t.Errorf("%s: expected error, received %T\n", c, ai[1])
-		} else if err != nil {
-			t.Errorf("%s: unexpected error: %v\n", c, err)
+		if resp.Object != mock.TestObject {
+			tErrorStr(t, f, mock.TestObject, resp.Object)
 		}
 
-		if len(testsrvdata) != 1 {
-			t.Errorf("%s: received %d values, expected 1\n", c, len(testsrvdata))
-		} else if !bytes.Equal(testsrvdata[0], output) {
-			t.Errorf("%s: received %s\nExpected: %s\n", c, testsrvdata, output)
+		expData = []byte(strings.Join(txtargs, " "))
+		if !bytes.Equal(expData, srv.DataIn.Bytes()) {
+			tErrorStr(t, f, expData, srv.DataIn.Bytes())
 		}
 	}
 
-	testsrvdata = [][]byte{}
-	output := []byte("TTL test obj1")
+	srv.HandleFunc("TTL", srv.ReturnOkTrue)
+	srv.DataIn.Reset()
 
-	testsrv.HandleFunc("TTL", respReturnOKTrue)
-
-	ttl, err := testdb.TTL("test", "obj1")
+	ttl, err := db.TTL("test", "obj1")
 	if err != nil {
-		t.Errorf("TTL unexpected error: %v\n", err)
+		tFatalErr(t, "TTL", err)
 	}
 
-	if ttl != 5.67 {
-		t.Error("TTL received incorrect response")
+	if ttl != mock.TestTTL {
+		tErrorVal(t, "TTL", mock.TestTTL, ttl)
 	}
 
-	if len(testsrvdata) != 1 {
-		t.Errorf("TTL received %d values, expected 1\n", len(testsrvdata))
-	} else if !bytes.Equal(testsrvdata[0], output) {
-		t.Errorf("TTL received %s\nExpected: %s\n", testsrvdata, output)
-	}
-}
-
-// Test Database.Get not found.
-func testGetNotFound(t *testing.T) {
-	output := []byte("GET test value1")
-
-	testsrv.HandleFunc("GET", respReturnOKNotFound)
-
-	testsrvdata = [][]byte{}
-
-	resp, err := testdb.Get("test", "value1")
-	if resp != nil {
-		t.Errorf("received unexpected response: %v\n", resp)
+	expData = []byte("TTL test obj1")
+	if !bytes.Equal(expData, srv.DataIn.Bytes()) {
+		tErrorStr(t, "TTL", expData, srv.DataIn.Bytes())
 	}
 
+	err = db.Close()
 	if err != nil {
-		t.Errorf("received unexpected error: %v\n", err)
+		tFatalErr(t, "Close", err)
 	}
-
-	if len(testsrvdata) != 1 {
-		t.Errorf("Received %d values, expected 1\n", len(testsrvdata))
-	} else if !bytes.Equal(testsrvdata[0], output) {
-		t.Errorf("Received %s\nExpected: %s\n", testsrvdata, output)
-	}
-}
-
-// Server handler, returns error.
-func respReturnErr(c *resp.Conn, args []resp.Value) bool {
-	var err error
-
-	var data []byte
-
-	for k, v := range args {
-		if k == 0 {
-			data = v.Bytes()
-
-			continue
-		}
-
-		data = bytes.Join([][]byte{data, v.Bytes()}, []byte(" "))
-	}
-
-	testsrvdata = append(testsrvdata, data)
-
-	err = c.WriteError(errors.New("test server error")) //nolint:goerr113 // ignore test error
-	if err != nil {
-		testT.Fatalf("internal write error: %s\n", err)
-	}
-
-	return true
-}
-
-// Server handler, returns ok:false with an err string.
-func respReturnOKFalse(c *resp.Conn, args []resp.Value) bool {
-	var err error
-
-	var data []byte
-
-	for k, v := range args {
-		if k == 0 {
-			data = v.Bytes()
-
-			continue
-		}
-
-		data = bytes.Join([][]byte{data, v.Bytes()}, []byte(" "))
-	}
-
-	testsrvdata = append(testsrvdata, data)
-
-	err = c.WriteSimpleString(`{"ok":false,"err":"test ok error"}`)
-	if err != nil {
-		testT.Fatalf("internal write error: %s\n", err)
-	}
-
-	return true
-}
-
-// Server handler, returns ok:false with a not found error.
-func respReturnOKNotFound(c *resp.Conn, args []resp.Value) bool {
-	var err error
-
-	var data []byte
-
-	for k, v := range args {
-		if k == 0 {
-			data = v.Bytes()
-
-			continue
-		}
-
-		data = bytes.Join([][]byte{data, v.Bytes()}, []byte(" "))
-	}
-
-	testsrvdata = append(testsrvdata, data)
-
-	err = c.WriteSimpleString(`{"ok":false,"err":"id not found"}`)
-	if err != nil {
-		testT.Fatalf("internal write error: %s\n", err)
-	}
-
-	return true
-}
-
-// Server handler, returns ok:true.
-func respReturnOKTrue(c *resp.Conn, args []resp.Value) bool {
-	var err error
-
-	var data []byte
-
-	for k, v := range args {
-		if k == 0 {
-			data = v.Bytes()
-
-			continue
-		}
-
-		data = bytes.Join([][]byte{data, v.Bytes()}, []byte(" "))
-	}
-
-	testsrvdata = append(testsrvdata, data)
-
-	err = c.WriteSimpleString(`{"ok":true, "object":"test", "ttl": 5.67}`)
-	if err != nil {
-		testT.Fatalf("internal write error: %s\n", err)
-	}
-
-	return true
 }
 
 // reflectMethod runs a method by reflection.
-func reflectMethod(db *t38c.Database, m string, arg ...interface{}) []interface{} {
-	dbv := reflect.ValueOf(db)
+func reflectMethod(db *t38c.Database, m string, args ...interface{}) []interface{} {
+	dbVal := reflect.ValueOf(db)
 
-	va := make([]reflect.Value, len(arg))
-	for i, v := range arg {
-		va[i] = reflect.ValueOf(v)
+	argVals := make([]reflect.Value, len(args))
+	for i, a := range args {
+		argVals[i] = reflect.ValueOf(a)
 	}
 
-	f := dbv.MethodByName(m)
-	rv := f.Call(va)
+	f := dbVal.MethodByName(m)
+	retVals := f.Call(argVals)
 
-	r := make([]interface{}, len(rv))
-	for i, v := range rv {
+	r := make([]interface{}, len(retVals))
+	for i, v := range retVals {
 		r[i] = v.Interface()
 	}
 
