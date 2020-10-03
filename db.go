@@ -23,7 +23,6 @@
 package t38c
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -31,10 +30,11 @@ import (
 	"github.com/mediocregopher/radix/v3"
 )
 
+// Database errors.
 var (
-	errUninitialized = errors.New("database not initialized")
-	errArgs          = errors.New("invalid arguments")
-	errResponse      = errors.New("received error")
+	errUninitialized = newError(nil, "database not initialized")
+	errResponse      = newError(nil, "received error")
+	errArgs          = newError(nil, "invalid arguments")
 )
 
 // Database is the primary object for interacting with the database.
@@ -59,7 +59,7 @@ func Connect(server string, port string, poolsize int) (db *Database, err error)
 		radix.PoolConnFunc(connectJSON),
 	)
 	if err != nil {
-		return nil, err
+		return nil, newError(err, "error connecting to server")
 	}
 
 	return db, nil
