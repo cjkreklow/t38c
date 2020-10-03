@@ -37,21 +37,21 @@ func TestResponseErrors(t *testing.T) {
 
 func testResponseErrJSON(t *testing.T) {
 	json := []byte(`{invalid}`)
-	err := "received invalid JSON"
+	err := "error unmarshaling response: not valid JSON"
 
 	testResponseErr(t, json, err)
 }
 
 func testResponseErrValue(t *testing.T) {
 	json := []byte(`{"zzz": true}`)
-	err := "error decoding response: unknown response value"
+	err := "error unmarshaling response: unknown response value"
 
 	testResponseErr(t, json, err)
 }
 
 func testResponseErrType(t *testing.T) {
 	json := []byte(`{"fields": true}`)
-	err := "error decoding response: unknown field type"
+	err := "error unmarshaling response: unknown field type"
 
 	testResponseErr(t, json, err)
 }
@@ -241,19 +241,4 @@ func testResponseSrvErr(t *testing.T) {
 	if expErr != r.Err {
 		tErrorStr(t, "Err", expErr, r.Err)
 	}
-}
-
-func tFatalErr(t *testing.T, desc string, err error) { //nolint:unparam // future use
-	t.Helper()
-	t.Fatalf("%s: received unexpected error: %s", desc, err)
-}
-
-func tErrorStr(t *testing.T, desc string, exp interface{}, act interface{}) {
-	t.Helper()
-	t.Errorf("%s: expected %s | received %s", desc, exp, act)
-}
-
-func tErrorVal(t *testing.T, desc string, exp interface{}, act interface{}) {
-	t.Helper()
-	t.Errorf("%s: expected %v | received %v", desc, exp, act)
 }

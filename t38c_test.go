@@ -20,43 +20,26 @@
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// Package t38c implements client for working with a Tile38 database.
-package t38c
+package t38c_test
 
-import "fmt"
+import "testing"
 
-// t38cError is the error type for the t38c library.
-type t38cError struct {
-	msg  string // error message string from this library
-	werr error  // wrapped error from downstream function
+func tFatalErr(t *testing.T, desc string, err error) {
+	t.Helper()
+	t.Fatalf("%s: received unexpected error: %s", desc, err)
 }
 
-// Error returns the string value of an error.
-func (e *t38cError) Error() string {
-	if e.werr == nil {
-		return e.msg
-	}
-
-	return e.msg + ": " + e.werr.Error()
+func tFatalNoErr(t *testing.T, desc string) {
+	t.Helper()
+	t.Fatalf("%s: expected error | received nil", desc)
 }
 
-// Unwrap returns an underlying error if applicable.
-func (e *t38cError) Unwrap() error {
-	return e.werr
+func tErrorStr(t *testing.T, desc string, exp interface{}, act interface{}) {
+	t.Helper()
+	t.Errorf("%s: expected %s | received %s", desc, exp, act)
 }
 
-// newError returns a new t38cError.
-func newError(w error, m string) *t38cError {
-	return &t38cError{
-		msg:  m,
-		werr: w,
-	}
-}
-
-// newErrorf returns a new t38cError with a Printf-style message.
-func newErrorf(w error, m string, v ...interface{}) *t38cError {
-	return &t38cError{
-		msg:  fmt.Sprintf(m, v...),
-		werr: w,
-	}
+func tErrorVal(t *testing.T, desc string, exp interface{}, act interface{}) {
+	t.Helper()
+	t.Errorf("%s: expected %v | received %v", desc, exp, act)
 }
