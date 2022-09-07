@@ -86,7 +86,7 @@ func testConnectError(t *testing.T) {
 		tFatalNoErr(t, "Connect")
 	}
 
-	expErr := fmt.Sprintf("error connecting to server: %s", mock.TestServerError)
+	expErr := fmt.Sprintf("error connecting to server: error setting output to JSON: %s", mock.TestServerError)
 	if err.Error() != expErr {
 		tErrorStr(t, "Connect", expErr, err)
 	}
@@ -197,7 +197,8 @@ func TestCommands(t *testing.T) {
 
 // Test command with error from server.
 func testCommandErrors(t *testing.T) {
-	testCommandErr(t, srv.ReturnErr, mock.TestServerError)
+	expErr := fmt.Sprintf("database error: %s", mock.TestServerError)
+	testCommandErr(t, srv.ReturnErr, expErr)
 }
 
 // Test command with false response from server.
@@ -207,6 +208,8 @@ func testCommandFalse(t *testing.T) {
 
 // Run test commands expecting errors.
 func testCommandErr(t *testing.T, hf func(*resp.Conn, []resp.Value) bool, expErr string) { //nolint:funlen,gocognit // long test function okay
+	t.Helper()
+
 	srv.HandleFunc("OUTPUT", srv.ReturnOkTrue)
 	srv.DataIn.Reset()
 

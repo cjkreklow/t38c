@@ -57,6 +57,8 @@ func testResponseErrType(t *testing.T) {
 }
 
 func testResponseErr(t *testing.T, json []byte, e string) {
+	t.Helper()
+
 	r := new(t38c.Response)
 
 	err := r.UnmarshalText(json)
@@ -92,6 +94,8 @@ func testResponseSingleString(t *testing.T) {
 }
 
 func testResponseSingle(t *testing.T, json []byte, obj string) {
+	t.Helper()
+
 	r := new(t38c.Response)
 
 	err := r.UnmarshalText(json)
@@ -146,6 +150,8 @@ func testResponseMultID(t *testing.T) {
 }
 
 func testResponseMult(t *testing.T, json []byte, objs []string, ids []string) {
+	t.Helper()
+
 	r := new(t38c.Response)
 
 	err := r.UnmarshalText(json)

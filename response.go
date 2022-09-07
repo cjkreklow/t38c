@@ -61,7 +61,12 @@ func (r *Response) UnmarshalText(b []byte) (err error) {
 		// return them as errors
 		r := recover()
 		if r != nil {
-			err = newErrorf(nil, "error unmarshaling response: %s", r.(string))
+			s, ok := r.(string)
+			if ok {
+				err = newErrorf(nil, "error unmarshaling response: %s", s)
+			} else {
+				err = newError(nil, "error unmarshaling response")
+			}
 		}
 	}()
 
