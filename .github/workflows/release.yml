@@ -1,21 +1,15 @@
-name: Release
+name: Release on Tag
 on:
   push:
     tags:
       - 'v*'
-
-env:
-  GO111MODULE: on
-  GOPROXY: https://proxy.golang.org
 
 jobs:
   release:
     runs-on: ubuntu-latest
     name: Release Updates
     steps:
-      - name: Setup Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: '^1.15.0'
-      - name: Go Get
-        run: go get kreklow.us/go/t38c@${GITHUB_REF#'refs/tags/'}
+      - name: Refresh go.dev
+        run: curl https://proxy.golang.org/kreklow.us/go/t38c/@v/${GITHUB_REF#'refs/tags/'}.info
+      - name: Refresh Go Report Card
+        run: curl -d "repo=kreklow.us/go/t38c" https://goreportcard.com/checks
