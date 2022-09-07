@@ -43,7 +43,6 @@ var (
 //
 // Functions other than Close() accept arguments in the same form as the
 // Tile38 CLI. See https://tile38.com/commands/ for further information.
-//
 type Database struct {
 	pool *radix.Pool
 }
@@ -71,7 +70,12 @@ func (db *Database) Close() error {
 		return errUninitialized
 	}
 
-	return db.pool.Close()
+	err := db.pool.Close()
+	if err != nil {
+		err = newError(err, "error closing database connection")
+	}
+
+	return err
 }
 
 // Set saves an object to the database.
@@ -110,7 +114,7 @@ func (db *Database) Get(key string, id string, args ...string) (r *Response, err
 	r, err = db.runcmd("GET", cmdargs...)
 	if err != nil {
 		if err.Error() == "received error: id not found" {
-			return nil, nil
+			return nil, nil //nolint:nilnil // nil, nil expected when not found
 		}
 
 		return nil, err
@@ -240,7 +244,7 @@ func (db *Database) runcmd(cmd string, args ...string) (r *Response, err error) 
 
 	err = db.pool.Do(radix.Cmd(r, cmd, args...))
 	if err != nil {
-		return nil, err
+		return nil, newError(err, "database error")
 	}
 
 	if !r.Ok {
@@ -254,20 +258,20 @@ func (db *Database) runcmd(cmd string, args ...string) (r *Response, err error) 
 func connectJSON(net, addr string) (conn radix.Conn, err error) {
 	conn, err = radix.Dial(net, addr)
 	if err != nil {
-		return nil, err
+		return nil, newError(err, "error connecting to database")
 	}
 
 	resp := new(Response)
 
 	err = conn.Do(radix.Cmd(resp, "OUTPUT", "json"))
 	if err != nil {
-		conn.Close()
+		conn.Close() //nolint:errcheck // Close() in error path
 
-		return nil, err
+		return nil, newError(err, "error setting output to JSON")
 	}
 
 	if !resp.Ok {
-		conn.Close()
+		conn.Close() //nolint:errcheck // Close() in error path
 
 		return nil, fmt.Errorf("%w: %s", errResponse, resp.Err)
 	}

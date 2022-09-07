@@ -207,6 +207,8 @@ func testCommandFalse(t *testing.T) {
 
 // Run test commands expecting errors.
 func testCommandErr(t *testing.T, hf func(*resp.Conn, []resp.Value) bool, expErr string) { //nolint:funlen,gocognit // long test function okay
+	t.Helper()
+
 	srv.HandleFunc("OUTPUT", srv.ReturnOkTrue)
 	srv.DataIn.Reset()
 
