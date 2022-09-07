@@ -26,20 +26,20 @@ import "testing"
 
 func tFatalErr(t *testing.T, desc string, err error) {
 	t.Helper()
-	t.Fatalf("%s: received unexpected error: %s", desc, err)
+	t.Fatalf("%s - received unexpected error: %s", desc, err)
 }
 
 func tFatalNoErr(t *testing.T, desc string) {
 	t.Helper()
-	t.Fatalf("%s: expected error | received nil", desc)
+	t.Fatalf("%s - expected: error | received: nil", desc)
 }
 
 func tErrorStr(t *testing.T, desc string, exp interface{}, act interface{}) {
 	t.Helper()
-	t.Errorf("%s: expected %s | received %s", desc, exp, act)
+	t.Errorf("%s - expected: %s | received: %s", desc, exp, act)
 }
 
 func tErrorVal(t *testing.T, desc string, exp interface{}, act interface{}) {
 	t.Helper()
-	t.Errorf("%s: expected %v | received %v", desc, exp, act)
+	t.Errorf("%s - expected: %v | received: %v", desc, exp, act)
 }
