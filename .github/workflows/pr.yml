@@ -4,21 +4,23 @@ on: [pull_request]
 jobs:
   pr-run:
     runs-on: ubuntu-latest
-    name: GolangCI-Lint
+    name: Lint and Coverage
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
       - name: Setup Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
-          go-version: '^1.19.0'
+          go-version: stable
+      - name: Checkout
+        uses: actions/checkout@v4
       - name: Run Lint
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.49
+          version: latest
       - name: Run Tests
         run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
       - name: Upload to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
+          fail_ci_if_error: true
           file: ./coverage.txt
+          token: ${{ secrets.CODECOV_TOKEN }}

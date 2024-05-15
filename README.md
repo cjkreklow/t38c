@@ -1,8 +1,8 @@
 # Overview
 [![PkgGoDev](https://pkg.go.dev/badge/kreklow.us/go/t38c)](https://pkg.go.dev/kreklow.us/go/t38c)
-![MIT License](https://img.shields.io/github/license/cjkreklow/t38c.svg)
-![Latest Version](https://img.shields.io/github/tag/cjkreklow/t38c.svg)
-[![Build Status](https://www.travis-ci.org/cjkreklow/t38c.svg?branch=main)](https://www.travis-ci.org/cjkreklow/t38c)
+![License](https://img.shields.io/github/license/cjkreklow/t38c)
+![Version](https://img.shields.io/github/v/tag/cjkreklow/t38c)
+![Status](https://github.com/cjkreklow/t38c/actions/workflows/push.yml/badge.svg?branch=main)
 [![Codecov](https://codecov.io/gh/cjkreklow/t38c/branch/main/graph/badge.svg)](https://codecov.io/gh/cjkreklow/t38c)
 
 `t38c` is a Go client library for the Tile38 geospatial database.

@@ -1,4 +1,4 @@
-// Copyright 2020 Collin Kreklow
+// Copyright 2024 Collin Kreklow
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -86,7 +86,7 @@ func testConnectError(t *testing.T) {
 		tFatalNoErr(t, "Connect")
 	}
 
-	expErr := fmt.Sprintf("error connecting to server: error setting output to JSON: %s", mock.TestServerError)
+	expErr := "error connecting to server: error setting output to JSON: " + mock.TestServerError
 	if err.Error() != expErr {
 		tErrorStr(t, "Connect", expErr, err)
 	}
@@ -111,7 +111,7 @@ func testConnectFalse(t *testing.T) {
 		tFatalNoErr(t, "Connect")
 	}
 
-	expErr := fmt.Sprintf("error connecting to server: received error: %s", mock.TestOkFalse)
+	expErr := "error connecting to server: received error: " + mock.TestOkFalse
 	if err.Error() != expErr {
 		tErrorStr(t, "Connect", expErr, err)
 	}
@@ -197,13 +197,13 @@ func TestCommands(t *testing.T) {
 
 // Test command with error from server.
 func testCommandErrors(t *testing.T) {
-	expErr := fmt.Sprintf("database error: %s", mock.TestServerError)
+	expErr := "database error: " + mock.TestServerError
 	testCommandErr(t, srv.ReturnErr, expErr)
 }
 
 // Test command with false response from server.
 func testCommandFalse(t *testing.T) {
-	testCommandErr(t, srv.ReturnOkFalse, fmt.Sprintf("received error: %s", mock.TestOkFalse))
+	testCommandErr(t, srv.ReturnOkFalse, "received error: "+mock.TestOkFalse)
 }
 
 // Run test commands expecting errors.
