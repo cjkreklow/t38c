@@ -4,7 +4,7 @@ go 1.21
 
 require (
 	github.com/mediocregopher/radix/v3 v3.8.1
-	github.com/tidwall/gjson v1.17.1
+	github.com/tidwall/gjson v1.17.2
 	github.com/tidwall/resp v0.1.1
 )
 
