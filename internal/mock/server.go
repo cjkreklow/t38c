@@ -1,4 +1,4 @@
-// Copyright 2024 Collin Kreklow
+// Copyright 2026 Collin Kreklow
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -76,7 +76,7 @@ func NewServer() *Server {
 		}
 	}(srv)
 
-	time.Sleep(100 * time.Millisecond) // give server time to start
+	time.Sleep(100 * time.Millisecond) //nolint:mnd // give server time to start
 
 	return srv
 }

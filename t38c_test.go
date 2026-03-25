@@ -1,4 +1,4 @@
-// Copyright 2024 Collin Kreklow
+// Copyright 2026 Collin Kreklow
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -34,12 +34,12 @@ func tFatalNoErr(t *testing.T, desc string) {
 	t.Fatalf("%s - expected: error | received: nil", desc)
 }
 
-func tErrorStr(t *testing.T, desc string, exp interface{}, act interface{}) {
+func tErrorStr(t *testing.T, desc string, exp any, act any) {
 	t.Helper()
 	t.Errorf("%s - expected: %s | received: %s", desc, exp, act)
 }
 
-func tErrorVal(t *testing.T, desc string, exp interface{}, act interface{}) {
+func tErrorVal(t *testing.T, desc string, exp any, act any) {
 	t.Helper()
 	t.Errorf("%s - expected: %v | received: %v", desc, exp, act)
 }

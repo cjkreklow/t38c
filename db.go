@@ -1,4 +1,4 @@
-// Copyright 2024 Collin Kreklow
+// Copyright 2026 Collin Kreklow
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -255,7 +255,7 @@ func (db *Database) runcmd(cmd string, args ...string) (r *Response, err error) 
 }
 
 // connectJSON creates a connection and sets the output mode to JSON.
-func connectJSON(net, addr string) (conn radix.Conn, err error) {
+func connectJSON(net, addr string) (conn radix.Conn, err error) { //nolint:ireturn // radix.Conn is passed through
 	conn, err = radix.Dial(net, addr)
 	if err != nil {
 		return nil, newError(err, "error connecting to database")

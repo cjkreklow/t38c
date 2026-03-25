@@ -10,10 +10,11 @@ jobs:
     name: Go ${{ matrix.go }}
     steps:
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
+          cache: false
           go-version: ${{ matrix.go }}
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Run Tests
         run: go test -v -race ./...

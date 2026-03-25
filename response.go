@@ -1,4 +1,4 @@
-// Copyright 2024 Collin Kreklow
+// Copyright 2026 Collin Kreklow
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -81,7 +81,7 @@ func (r *Response) UnmarshalText(b []byte) (err error) {
 
 // parse is an iterator function used in gjson.ForEach to parse the
 // response JSON into the Response fields.
-func (r *Response) parse(k, v gjson.Result) bool {
+func (r *Response) parse(k, v gjson.Result) bool { //nolint:cyclop // switch case not collapsable
 	switch k.Str {
 	case "ok":
 		r.Ok = v.Bool()
