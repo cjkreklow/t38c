@@ -1,4 +1,4 @@
-// Copyright 2024 Collin Kreklow
+// Copyright 2026 Collin Kreklow
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -38,7 +38,7 @@ import (
 var (
 	srv *mock.Server = mock.NewServer()
 
-	testErrFuncs = map[string][]interface{}{
+	testErrFuncs = map[string][]any{
 		"Set":     {"test", "obj1", "STRING", "testing"},
 		"Del":     {"test", "obj1"},
 		"PDel":    {"test", "obj*"},
@@ -46,7 +46,7 @@ var (
 		"Persist": {"test", "obj1"},
 	}
 
-	testRespErrFuncs = map[string][]interface{}{
+	testRespErrFuncs = map[string][]any{
 		"Get":    {"test", "obj1"},
 		"Scan":   {"test"},
 		"Search": {"test"},
@@ -207,7 +207,7 @@ func testCommandFalse(t *testing.T) {
 }
 
 // Run test commands expecting errors.
-func testCommandErr(t *testing.T, hf func(*resp.Conn, []resp.Value) bool, expErr string) { //nolint:funlen,gocognit // long test function okay
+func testCommandErr(t *testing.T, hf func(*resp.Conn, []resp.Value) bool, expErr string) {
 	t.Helper()
 
 	srv.HandleFunc("OUTPUT", srv.ReturnOkTrue)
@@ -402,7 +402,7 @@ func testCommandGetNotFound(t *testing.T) {
 }
 
 // Run test commands expecting success.
-func testCommandSuccess(t *testing.T) { //nolint:funlen,gocognit // long test function okay
+func testCommandSuccess(t *testing.T) {
 	srv.HandleFunc("OUTPUT", srv.ReturnOkTrue)
 	srv.DataIn.Reset()
 
@@ -515,7 +515,7 @@ func testCommandSuccess(t *testing.T) { //nolint:funlen,gocognit // long test fu
 }
 
 // reflectMethod runs a method by reflection.
-func reflectMethod(db *t38c.Database, m string, args ...interface{}) []interface{} {
+func reflectMethod(db *t38c.Database, m string, args ...any) []any {
 	dbVal := reflect.ValueOf(db)
 
 	argVals := make([]reflect.Value, len(args))
@@ -526,7 +526,7 @@ func reflectMethod(db *t38c.Database, m string, args ...interface{}) []interface
 	f := dbVal.MethodByName(m)
 	retVals := f.Call(argVals)
 
-	r := make([]interface{}, len(retVals))
+	r := make([]any, len(retVals))
 	for i, v := range retVals {
 		r[i] = v.Interface()
 	}
